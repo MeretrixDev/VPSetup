@@ -621,9 +621,22 @@ module_ssh() {
         fi
     fi
 
+    # Спрашиваем про PermitRootLogin явно — молча менять опасно
+    local permit_root="yes"
+    if $INTERACTIVE; then
+        echo -e "  ${DIM}Текущий способ входа: root по паролю."
+        echo -e "  'prohibit-password' — root только по SSH-ключу (безопаснее, но требует настроенного ключа).${NC}"
+        if confirm "Разрешить root вход только по SSH-ключу (prohibit-password)?"; then
+            permit_root="prohibit-password"
+            warn "Убедитесь, что SSH-ключ добавлен в ~/.ssh/authorized_keys до перезагрузки!"
+        else
+            ok "PermitRootLogin оставлен: yes (вход по паролю разрешён)"
+        fi
+    fi
+
     # Применяем hardening-параметры
     local -A params=(
-        [PermitRootLogin]="prohibit-password"
+        [PermitRootLogin]="${permit_root}"
         [PasswordAuthentication]="yes"
         [PermitEmptyPasswords]="no"
         [X11Forwarding]="no"
