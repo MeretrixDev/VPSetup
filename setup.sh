@@ -10,7 +10,7 @@
 #
 #  Universal VPS Setup & Hardening Script
 #  Платформа : Ubuntu 20.04 / 22.04 / 24.04 LTS
-#  Версия    : 1.0.2
+#  Версия    : 1.0.3
 #
 #  Модули (каждый можно пропустить флагом --skip-*):
 #    system      — обновление ОС и базовых пакетов
@@ -54,7 +54,7 @@ NC='\033[0m'
 # ─────────────────────────────────────────────────────────────────────────────
 #  ГЛОБАЛЬНЫЕ ПАРАМЕТРЫ (переопределяются флагами)
 # ─────────────────────────────────────────────────────────────────────────────
-SCRIPT_VERSION="1.0.2"
+SCRIPT_VERSION="1.0.3"
 LOG_FILE="/var/log/vps-setup.log"
 
 # Флаги пропуска модулей
@@ -120,10 +120,12 @@ ask() {
     local prompt="$1" default="${2:-}"
     local answer
     if [[ -n "$default" ]]; then
-        read -r -p "  ${CYAN}?${NC} ${prompt} [${default}]: " answer
+        printf "  ${CYAN}?${NC} %s [%s]: " "${prompt}" "${default}" >&2
+        read -r answer
         printf '%s' "${answer:-$default}"
     else
-        read -r -p "  ${CYAN}?${NC} ${prompt}: " answer
+        printf "  ${CYAN}?${NC} %s: " "${prompt}" >&2
+        read -r answer
         printf '%s' "${answer}"
     fi
 }
@@ -132,7 +134,8 @@ ask() {
 confirm() {
     local prompt="$1" default="${2:-y}"
     local yn
-    read -r -p "  ${YELLOW}?${NC} ${prompt} (y/n) [${default}]: " yn
+    printf "  ${YELLOW}?${NC} %s (y/n) [%s]: " "${prompt}" "${default}" >&2
+    read -r yn
     yn="${yn:-$default}"
     [[ "$yn" =~ ^[Yy]$ ]]
 }
