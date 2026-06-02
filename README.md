@@ -31,7 +31,6 @@ bash <(wget -qO- https://raw.githubusercontent.com/MeretrixDev/VPSetup/main/setu
 | `ssh` | SSH hardening: disable root/empty passwords, tune timeouts |
 | `firewall` | UFW: SSH + 80/443 + custom ports + optional trusted IP |
 | `fail2ban` | Brute-force protection for SSH via UFW backend |
-| `logrotate` | System and setup log rotation |
 | `motd` | Informational login banner (IP, RAM, Disk, Uptime) |
 
 Every module can be skipped independently with a `--skip-*` flag.
@@ -50,7 +49,6 @@ Every module can be skipped independently with a `--skip-*` flag.
 --skip-ssh          Skip SSH hardening
 --skip-firewall     Skip UFW configuration
 --skip-fail2ban     Skip Fail2Ban
---skip-logrotate    Skip logrotate configuration
 --skip-motd         Skip MOTD banner
 
 --new-ssh-port=N    Change SSH port to N (1024–65535)
