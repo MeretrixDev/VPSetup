@@ -1,4 +1,4 @@
-# vps-setup
+# VPSetup
 
 Universal VPS Setup & Hardening Script for Ubuntu 20.04 / 22.04 / 24.04 LTS.
 
@@ -7,16 +7,14 @@ Configures a fresh server with security hardening, performance tuning, and Docke
 ## Quick start
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/YOUR_USERNAME/vps-setup/main/setup.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/MeretrixDev/VPSetup/main/setup.sh)
 ```
 
 Or with `wget`:
 
 ```bash
-bash <(wget -qO- https://raw.githubusercontent.com/YOUR_USERNAME/vps-setup/main/setup.sh)
+bash <(wget -qO- https://raw.githubusercontent.com/MeretrixDev/VPSetup/main/setup.sh)
 ```
-
-> **Note:** Replace `YOUR_USERNAME` with your GitHub username.
 
 ---
 
@@ -65,20 +63,20 @@ Every module can be skipped independently with a `--skip-*` flag.
 
 ```bash
 # Interactive (recommended for first run)
-bash <(curl -fsSL https://raw.githubusercontent.com/YOUR_USERNAME/vps-setup/main/setup.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/MeretrixDev/VPSetup/main/setup.sh)
 
 # Non-interactive with extra ports and a trusted management IP
-bash <(curl -fsSL https://raw.githubusercontent.com/YOUR_USERNAME/vps-setup/main/setup.sh) \
+bash <(curl -fsSL https://raw.githubusercontent.com/MeretrixDev/VPSetup/main/setup.sh) \
   --non-interactive \
   --open-ports=8080,3000 \
   --trusted-ip=1.2.3.4
 
 # Everything except Docker (already installed)
-bash <(curl -fsSL https://raw.githubusercontent.com/YOUR_USERNAME/vps-setup/main/setup.sh) \
+bash <(curl -fsSL https://raw.githubusercontent.com/MeretrixDev/VPSetup/main/setup.sh) \
   --skip-docker
 
 # Change SSH port to 2244, no BBR
-bash <(curl -fsSL https://raw.githubusercontent.com/YOUR_USERNAME/vps-setup/main/setup.sh) \
+bash <(curl -fsSL https://raw.githubusercontent.com/MeretrixDev/VPSetup/main/setup.sh) \
   --new-ssh-port=2244 \
   --skip-bbr
 ```
