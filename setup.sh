@@ -10,7 +10,7 @@
 #
 #  Universal VPS Setup & Hardening Script
 #  Платформа : Ubuntu 20.04 / 22.04 / 24.04 LTS
-#  Версия    : 1.0.0
+#  Версия    : 1.0.2
 #
 #  Модули (каждый можно пропустить флагом --skip-*):
 #    system      — обновление ОС и базовых пакетов
@@ -22,7 +22,6 @@
 #    ssh         — hardening SSH-конфигурации
 #    firewall    — UFW (с настраиваемыми портами)
 #    fail2ban    — защита от брутфорса
-#    logrotate   — ротация системных логов
 #    motd        — информационный баннер при входе
 #
 #  Использование:
@@ -55,7 +54,7 @@ NC='\033[0m'
 # ─────────────────────────────────────────────────────────────────────────────
 #  ГЛОБАЛЬНЫЕ ПАРАМЕТРЫ (переопределяются флагами)
 # ─────────────────────────────────────────────────────────────────────────────
-SCRIPT_VERSION="1.0.0"
+SCRIPT_VERSION="1.0.2"
 LOG_FILE="/var/log/vps-setup.log"
 
 # Флаги пропуска модулей
@@ -68,7 +67,6 @@ SKIP_SWAP=false
 SKIP_SSH=false
 SKIP_FIREWALL=false
 SKIP_FAIL2BAN=false
-SKIP_LOGROTATE=false
 SKIP_MOTD=false
 
 # Параметры SSH
@@ -175,7 +173,6 @@ parse_args() {
             --skip-ssh)       SKIP_SSH=true ;;
             --skip-firewall)  SKIP_FIREWALL=true ;;
             --skip-fail2ban)  SKIP_FAIL2BAN=true ;;
-            --skip-logrotate) SKIP_LOGROTATE=true ;;
             --skip-motd)      SKIP_MOTD=true ;;
 
             # Параметры
@@ -197,7 +194,6 @@ parse_args() {
                 echo "  --skip-ssh         Пропустить SSH hardening"
                 echo "  --skip-firewall    Пропустить настройку UFW"
                 echo "  --skip-fail2ban    Пропустить настройку Fail2Ban"
-                echo "  --skip-logrotate   Пропустить настройку logrotate"
                 echo "  --skip-motd        Пропустить настройку MOTD"
                 echo ""
                 echo "Параметры:"
@@ -318,7 +314,7 @@ module_system() {
         # Мониторинг
         htop iotop iftop nload ncdu
         # Безопасность
-        ufw fail2ban logrotate
+        ufw fail2ban
         # Разное
         jq cron apt-transport-https software-properties-common
         # Временные зоны и локализация
@@ -801,49 +797,7 @@ F2B
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  МОДУЛЬ 10: LOGROTATE
-# ─────────────────────────────────────────────────────────────────────────────
-module_logrotate() {
-    $SKIP_LOGROTATE && { warn "[logrotate] Пропущен (--skip-logrotate)"; return; }
-    step "Модуль: Logrotate"
-
-    # Глобальные настройки — сокращаем хранение до 4 недель
-    sed -i 's/^rotate [0-9]*/rotate 4/' /etc/logrotate.conf 2>/dev/null || true
-
-    # Конфиг для /var/log/*.log
-    cat > /etc/logrotate.d/vps-setup-system << 'LOGROTATECFG'
-/var/log/vps-setup.log {
-    weekly
-    rotate 4
-    compress
-    delaycompress
-    missingok
-    notifempty
-    copytruncate
-}
-
-/var/log/auth.log
-/var/log/syslog {
-    daily
-    rotate 7
-    compress
-    delaycompress
-    missingok
-    notifempty
-    sharedscripts
-    postrotate
-        /usr/lib/rsyslog/rsyslog-rotate 2>/dev/null || true
-    endscript
-}
-LOGROTATECFG
-
-    # Проверка конфигурации logrotate
-    run logrotate --debug /etc/logrotate.conf
-    ok "Logrotate настроен"
-}
-
-# ─────────────────────────────────────────────────────────────────────────────
-#  МОДУЛЬ 11: MOTD (баннер при входе)
+#  МОДУЛЬ 10: MOTD (баннер при входе)
 # ─────────────────────────────────────────────────────────────────────────────
 module_motd() {
     $SKIP_MOTD && { warn "[motd] Пропущен (--skip-motd)"; return; }
@@ -948,7 +902,6 @@ print_summary() {
     $SKIP_SSH       || echo -e "  ${GREEN}✔${NC}  SSH hardening (порт: ${SSH_PORT})"
     $SKIP_FIREWALL  || echo -e "  ${GREEN}✔${NC}  UFW firewall: ${ufw_status}"
     $SKIP_FAIL2BAN  || echo -e "  ${GREEN}✔${NC}  Fail2Ban"
-    $SKIP_LOGROTATE || echo -e "  ${GREEN}✔${NC}  Logrotate"
     $SKIP_MOTD      || echo -e "  ${GREEN}✔${NC}  MOTD баннер"
     echo ""
     echo -e "${BOLD}  🔧 СЛЕДУЮЩИЕ ШАГИ:${NC}"
@@ -978,7 +931,6 @@ print_plan() {
         "SKIP_SSH:ssh:SSH Hardening"
         "SKIP_FIREWALL:firewall:Настройка UFW Firewall"
         "SKIP_FAIL2BAN:fail2ban:Настройка Fail2Ban"
-        "SKIP_LOGROTATE:logrotate:Настройка Logrotate"
         "SKIP_MOTD:motd:Информационный MOTD-баннер"
     )
 
@@ -1017,7 +969,6 @@ main() {
     module_ssh
     module_firewall
     module_fail2ban
-    module_logrotate
     module_motd
 
     print_summary
