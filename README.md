@@ -28,7 +28,6 @@ bash <(wget -qO- https://raw.githubusercontent.com/MeretrixDev/VPSetup/main/setu
 | `ulimits` | `nofile` / `nproc` = 1 048 576 / 65 536 (PAM + systemd) |
 | `bbr` | TCP BBR congestion control + `fq` qdisc |
 | `swap` | Auto-sized swap file based on available RAM |
-| `ssh` | SSH hardening: disable root/empty passwords, tune timeouts |
 | `firewall` | UFW: SSH + 80/443 + custom ports + optional trusted IP |
 | `fail2ban` | Brute-force protection for SSH via UFW backend |
 | `motd` | Informational login banner (IP, RAM, Disk, Uptime) |
@@ -46,12 +45,10 @@ Every module can be skipped independently with a `--skip-*` flag.
 --skip-ulimits      Skip ulimit configuration
 --skip-bbr          Skip TCP BBR
 --skip-swap         Skip swap file creation
---skip-ssh          Skip SSH hardening
 --skip-firewall     Skip UFW configuration
 --skip-fail2ban     Skip Fail2Ban
 --skip-motd         Skip MOTD banner
 
---new-ssh-port=N    Change SSH port to N (1024–65535)
 --open-ports=LIST   Extra UFW ports: 8080,3000,9000/udp
 --trusted-ip=IP     Allow full access from this IP (CIDR ok)
 --non-interactive   No prompts — use defaults or provided flags
@@ -73,9 +70,8 @@ bash <(curl -fsSL https://raw.githubusercontent.com/MeretrixDev/VPSetup/main/set
 bash <(curl -fsSL https://raw.githubusercontent.com/MeretrixDev/VPSetup/main/setup.sh) \
   --skip-docker
 
-# Change SSH port to 2244, no BBR
+# no BBR
 bash <(curl -fsSL https://raw.githubusercontent.com/MeretrixDev/VPSetup/main/setup.sh) \
-  --new-ssh-port=2244 \
   --skip-bbr
 ```
 
