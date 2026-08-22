@@ -19,7 +19,6 @@
 #    ulimits     — лимиты файловых дескрипторов
 #    bbr         — TCP BBR congestion control
 #    swap        — автоматический swap-файл
-#    ssh         — hardening SSH-конфигурации
 #    firewall    — UFW (с настраиваемыми портами)
 #    fail2ban    — защита от брутфорса
 #    motd        — информационный баннер при входе
@@ -30,7 +29,7 @@
 #  Примеры:
 #    sudo bash vps-setup.sh
 #    sudo bash vps-setup.sh --non-interactive
-#    sudo bash vps-setup.sh --ssh-port=2244 --skip-docker --skip-bbr
+#    sudo bash vps-setup.sh --skip-docker --skip-bbr
 #    sudo bash vps-setup.sh --open-ports=8080,9000 --panel-ip=1.2.3.4
 #
 # =============================================================================
@@ -64,14 +63,12 @@ SKIP_SYSCTL=false
 SKIP_ULIMITS=false
 SKIP_BBR=false
 SKIP_SWAP=false
-SKIP_SSH=false
 SKIP_FIREWALL=false
 SKIP_FAIL2BAN=false
 SKIP_MOTD=false
 
-# Параметры SSH
-SSH_PORT=""           # автоопределение если не задан
-NEW_SSH_PORT=""       # если нужно сменить порт (--new-ssh-port=XXXX)
+# SSH-порт (автоопределение)
+SSH_PORT=""
 
 # Параметры фаерволла
 OPEN_PORTS=""         # дополнительные порты через запятую: "8080,9000/udp"
@@ -173,13 +170,11 @@ parse_args() {
             --skip-ulimits)   SKIP_ULIMITS=true ;;
             --skip-bbr)       SKIP_BBR=true ;;
             --skip-swap)      SKIP_SWAP=true ;;
-            --skip-ssh)       SKIP_SSH=true ;;
             --skip-firewall)  SKIP_FIREWALL=true ;;
             --skip-fail2ban)  SKIP_FAIL2BAN=true ;;
             --skip-motd)      SKIP_MOTD=true ;;
 
             # Параметры
-            --new-ssh-port=*) NEW_SSH_PORT="${arg#*=}" ;;
             --open-ports=*)   OPEN_PORTS="${arg#*=}" ;;
             --trusted-ip=*)   TRUSTED_IP="${arg#*=}" ;;
             --non-interactive) INTERACTIVE=false ;;
@@ -194,13 +189,11 @@ parse_args() {
                 echo "  --skip-ulimits     Пропустить настройку ulimits"
                 echo "  --skip-bbr         Пропустить включение TCP BBR"
                 echo "  --skip-swap        Пропустить создание swap"
-                echo "  --skip-ssh         Пропустить SSH hardening"
                 echo "  --skip-firewall    Пропустить настройку UFW"
                 echo "  --skip-fail2ban    Пропустить настройку Fail2Ban"
                 echo "  --skip-motd        Пропустить настройку MOTD"
                 echo ""
                 echo "Параметры:"
-                echo "  --new-ssh-port=N   Сменить SSH порт на N"
                 echo "  --open-ports=LIST  Дополнительные порты: 8080,9000,4443/udp"
                 echo "  --trusted-ip=IP    IP с расширенным доступом в UFW"
                 echo "  --non-interactive  Без интерактивных вопросов"
@@ -208,7 +201,7 @@ parse_args() {
                 echo "Примеры:"
                 echo "  sudo bash vps-setup.sh"
                 echo "  sudo bash vps-setup.sh --skip-docker --open-ports=8080,3000"
-                echo "  sudo bash vps-setup.sh --non-interactive --new-ssh-port=2244"
+                echo "  sudo bash vps-setup.sh --non-interactive --skip-bbr"
                 exit 0
                 ;;
             *)
@@ -599,93 +592,7 @@ module_swap() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  МОДУЛЬ 7: SSH HARDENING
-# ─────────────────────────────────────────────────────────────────────────────
-module_ssh() {
-    $SKIP_SSH && { warn "[ssh] Пропущен (--skip-ssh)"; return; }
-    step "Модуль: SSH Hardening"
-
-    local sshd_cfg="/etc/ssh/sshd_config"
-
-    # Резервная копия (только один раз)
-    local backup="${sshd_cfg}.bak"
-    [[ -f "${backup}" ]] || cp "${sshd_cfg}" "${backup}"
-    ok "Резервная копия: ${backup}"
-
-    # Смена SSH-порта (интерактивно или флагом)
-    if [[ -z "$NEW_SSH_PORT" ]] && $INTERACTIVE; then
-        echo -e "  ${DIM}Смена SSH-порта повышает защиту от автоматических сканеров.${NC}"
-        if confirm "Сменить SSH-порт (текущий: ${SSH_PORT})?"; then
-            NEW_SSH_PORT=$(ask "Новый SSH-порт (1024–65535)" "${SSH_PORT}")
-        fi
-    fi
-
-    # Спрашиваем про PermitRootLogin явно — молча менять опасно
-    local permit_root="yes"
-    if $INTERACTIVE; then
-        echo -e "  ${DIM}Текущий способ входа: root по паролю."
-        echo -e "  'prohibit-password' — root только по SSH-ключу (безопаснее, но требует настроенного ключа).${NC}"
-        if confirm "Разрешить root вход только по SSH-ключу (prohibit-password)?"; then
-            permit_root="prohibit-password"
-            warn "Убедитесь, что SSH-ключ добавлен в ~/.ssh/authorized_keys до перезагрузки!"
-        else
-            ok "PermitRootLogin оставлен: yes (вход по паролю разрешён)"
-        fi
-    fi
-
-    # Применяем hardening-параметры
-    local -A params=(
-        [PermitRootLogin]="${permit_root}"
-        [PasswordAuthentication]="yes"
-        [PermitEmptyPasswords]="no"
-        [X11Forwarding]="no"
-        [PrintLastLog]="yes"
-        [MaxAuthTries]="4"
-        [ClientAliveInterval]="300"
-        [ClientAliveCountMax]="3"
-        [LoginGraceTime]="30"
-        [MaxSessions]="10"
-        [TCPKeepAlive]="yes"
-        [AllowAgentForwarding]="no"
-        [Protocol]="2"
-    )
-
-    for key in "${!params[@]}"; do
-        local val="${params[$key]}"
-        if grep -qE "^#?${key}\s" "${sshd_cfg}"; then
-            sed -i "s|^#\?${key}\s.*|${key} ${val}|" "${sshd_cfg}"
-        else
-            echo "${key} ${val}" >> "${sshd_cfg}"
-        fi
-    done
-
-    # Смена порта
-    if [[ -n "$NEW_SSH_PORT" ]] && [[ "$NEW_SSH_PORT" != "$SSH_PORT" ]]; then
-        if [[ "$NEW_SSH_PORT" =~ ^[0-9]+$ ]] && \
-           (( NEW_SSH_PORT >= 1024 && NEW_SSH_PORT <= 65535 )); then
-            sed -i "s|^#\?Port\s.*|Port ${NEW_SSH_PORT}|" "${sshd_cfg}"
-            grep -q "^Port " "${sshd_cfg}" \
-                || echo "Port ${NEW_SSH_PORT}" >> "${sshd_cfg}"
-            ok "SSH порт будет изменён: ${SSH_PORT} → ${NEW_SSH_PORT}"
-            warn "Не забудьте открыть порт ${NEW_SSH_PORT} в фаерволле до перезагрузки!"
-            SSH_PORT="${NEW_SSH_PORT}"
-        else
-            warn "Некорректный порт: ${NEW_SSH_PORT} — порт не изменён"
-        fi
-    fi
-
-    # Проверка конфигурации перед применением
-    if sshd -t >> "${LOG_FILE}" 2>&1; then
-        run systemctl reload sshd
-        ok "SSH hardening применён и конфигурация перезагружена"
-    else
-        warn "Конфигурация SSH не прошла проверку — восстанавливаем из бэкапа"
-        cp "${backup}" "${sshd_cfg}"
-    fi
-}
-
-# ─────────────────────────────────────────────────────────────────────────────
-#  МОДУЛЬ 8: UFW FIREWALL
+#  МОДУЛЬ 7: UFW FIREWALL
 # ─────────────────────────────────────────────────────────────────────────────
 module_firewall() {
     $SKIP_FIREWALL && { warn "[firewall] Пропущен (--skip-firewall)"; return; }
@@ -761,7 +668,7 @@ module_firewall() {
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  МОДУЛЬ 9: FAIL2BAN
+#  МОДУЛЬ 8: FAIL2BAN
 # ─────────────────────────────────────────────────────────────────────────────
 module_fail2ban() {
     $SKIP_FAIL2BAN && { warn "[fail2ban] Пропущен (--skip-fail2ban)"; return; }
@@ -800,7 +707,7 @@ F2B
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  МОДУЛЬ 10: MOTD (баннер при входе)
+#  МОДУЛЬ 9: MOTD (баннер при входе)
 # ─────────────────────────────────────────────────────────────────────────────
 module_motd() {
     $SKIP_MOTD && { warn "[motd] Пропущен (--skip-motd)"; return; }
@@ -902,20 +809,18 @@ print_summary() {
     $SKIP_ULIMITS   || echo -e "  ${GREEN}✔${NC}  Лимиты файловых дескрипторов (nofile=1048576)"
     $SKIP_BBR       || echo -e "  ${GREEN}✔${NC}  TCP BBR: ${bbr_status}"
     $SKIP_SWAP      || echo -e "  ${GREEN}✔${NC}  Swap: ${swap_info}"
-    $SKIP_SSH       || echo -e "  ${GREEN}✔${NC}  SSH hardening (порт: ${SSH_PORT})"
     $SKIP_FIREWALL  || echo -e "  ${GREEN}✔${NC}  UFW firewall: ${ufw_status}"
     $SKIP_FAIL2BAN  || echo -e "  ${GREEN}✔${NC}  Fail2Ban"
     $SKIP_MOTD      || echo -e "  ${GREEN}✔${NC}  MOTD баннер"
     echo ""
     echo -e "${BOLD}  🔧 СЛЕДУЮЩИЕ ШАГИ:${NC}"
     echo -e "  ${DIM}1. Перезагрузите сервер: reboot"
-    echo -e "  2. Проверьте SSH доступ на порту ${SSH_PORT} перед закрытием сессии"
-    echo -e "  3. Установите нужные сервисы поверх этой базы${NC}"
+    echo -e "  2. Установите нужные сервисы поверх этой базы${NC}"
     echo ""
     echo -e "  ${DIM}Полный лог установки: ${LOG_FILE}${NC}"
     echo ""
 
-    _log INFO "=== SETUP COMPLETE === IP=${public_ip} SSH=${SSH_PORT} BBR=${bbr_status} Docker=${docker_ver}"
+    _log INFO "=== SETUP COMPLETE === IP=${public_ip} BBR=${bbr_status} Docker=${docker_ver}"
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -931,7 +836,6 @@ print_plan() {
         "SKIP_ULIMITS:ulimits:Настройка ulimits (nofile/nproc)"
         "SKIP_BBR:bbr:Включение TCP BBR"
         "SKIP_SWAP:swap:Создание Swap-файла"
-        "SKIP_SSH:ssh:SSH Hardening"
         "SKIP_FIREWALL:firewall:Настройка UFW Firewall"
         "SKIP_FAIL2BAN:fail2ban:Настройка Fail2Ban"
         "SKIP_MOTD:motd:Информационный MOTD-баннер"
@@ -969,7 +873,6 @@ main() {
     module_ulimits
     module_bbr
     module_swap
-    module_ssh
     module_firewall
     module_fail2ban
     module_motd
